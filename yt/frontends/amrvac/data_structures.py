@@ -9,8 +9,10 @@ import stat
 import struct
 import warnings
 import weakref
+from collections import OrderedDict
 
 import numpy as np
+import sympy as sp
 
 from yt.data_objects.index_subobjects.grid_patch import AMRGridPatch
 from yt.data_objects.static_output import Dataset
@@ -143,6 +145,7 @@ class AMRVACDataset(Dataset):
         units_override=None,
         unit_system="cgs",
         geometry_override=None,
+        b0field=None,
         parfiles=None,
     ):
         """Instanciate AMRVACDataset.
@@ -167,14 +170,26 @@ class AMRVACDataset(Dataset):
             When this parameter is passed along with v5 or more newer datfiles,
             will precede over their internal "geometry" tag.
 
+        b0field : dict
+            Used for B0-splitted AMRVAC datasets. This should be a dictionary
+            containing SymPy expressions for the three B0 field components that
+            are defined in AMRVAC's mod_usr.t file. Dictionary keys should be
+            given by 'b01', 'b02' and 'b03'. The three coordinates should
+            be given by 'ixo1', 'ixo2' and 'ixo3', consistent with AMRVAC's syntax.
+
         parfiles : str or list, optional
             One or more parfiles to be passed to
             yt.frontends.amrvac.read_amrvac_parfiles()
 
         """
-        # note: geometry_override and parfiles are specific to this frontend
+        # note: geometry_override, parfiles and b0field are specific to this frontend
 
         self._geometry_override = geometry_override
+        # b0 field splitting stuff
+        self._b0_is_split = False
+        self._b0field = b0field
+        self._allowed_b0split_keys = ("b01", "b02", "b03")
+        self._allowed_b0split_symbols = (sp.symbols("ixo1, ixo2, ixo3"))
         super().__init__(
             filename,
             dataset_type,
@@ -182,8 +197,11 @@ class AMRVACDataset(Dataset):
             unit_system=unit_system,
         )
 
-        self._parfiles = parfiles
+        if self._b0field is not None:
+            self._b0_is_split = True
+            self._validate_b0split_field()
 
+        self._parfiles = parfiles
         namelist = None
         namelist_gamma = None
         c_adiab = None
@@ -280,6 +298,38 @@ class AMRVACDataset(Dataset):
         }
         geom_key = geometry_tag.split("_")[0].lower()
         return known_geoms[geom_key]
+
+    def _validate_b0split_field(self):
+        """Validate the user-provided B0 field for field splitting."""
+        # frontend specific method
+        # check that a dictionary is supplied
+        if not isinstance(self._b0field, dict):
+            raise ValueError("'b0field' kwarg should be a dictionary!")
+        if len(self._b0field) > 3:
+            raise ValueError("'b0field' may contain at most 3 items.")
+        # check that keys are valid
+        for key in self._b0field.keys():
+            if key not in self._allowed_b0split_keys:
+                raise KeyError(
+                    f"'b0field' should have keys f{self._allowed_b0split_keys} "
+                    f"but {key} was given."
+                )
+        # check that equations are valid
+        for eq in self._b0field.values():
+            if isinstance(eq, sp.Expr):
+                if not eq.free_symbols.issubset(set(self._allowed_b0split_symbols)):
+                    raise ValueError(
+                        f"'b0field' equations may only contain the SymPy symbols "
+                        f"{self._allowed_b0split_symbols} but received "
+                        f"{eq.free_symbols}"
+                    )
+            elif (
+                not isinstance(eq, (np.int, np.complex, np.float64)) and eq is not None
+            ):
+                raise ValueError(
+                    f"If the 'b0field' item is not a SymPy expression it should be "
+                    f"None or a constant, but received {type(eq)}."
+                )
 
     def _parse_parameter_file(self):
         """Parse input datfile's header. Apply geometry_override if specified."""
