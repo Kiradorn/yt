@@ -202,6 +202,41 @@ class AMRVACFieldInfo(FieldInfoContainer):
                 units="code_magnetic",
             )
 
+        # override energy density, for B0-splitted datasets only the perturbed
+        # energy e1 is saved to the datfile. Total energy density is then given by
+        # etot = e1 + B0**2/2 + B0 * B1
+        def _etot_field_split(field, data):
+            b0total = data["amrvac", "magnetic_1"] ** 2
+            b1total = data["amrvac", "b1"] ** 2
+            for idir in "23":
+                if ("amrvac", f"b{idir}") not in self.ds.field_list:
+                    break
+                b0total += data["amrvac", f"magnetic_{idir}"] ** 2
+                b1total += data["amrvac", f"b{idir}"] ** 2
+            # divide by mu0, see comment in magnetic energy density
+            etot = (
+                data["amrvac", "e"]
+                + 0.5 * b0total / (4 * np.pi)
+                + np.sqrt(b0total * b1total) / (4 * np.pi)
+            )
+            return etot
+
+        # dimensionful analog, force override default e field
+        self.add_field(
+            ("gas", "energy_density"),
+            function=_etot_field_split,
+            sampling_type="cell",
+            units=self.ds.unit_system["density"] * self.ds.unit_system["velocity"] ** 2,
+            dimensions=dimensions.density * dimensions.velocity ** 2,
+            force_override=True,
+        )
+        # alias for code unit analog
+        self.alias(
+            ("amrvac", "energy_density"),
+            ("gas", "energy_density"),
+            units="code_pressure",
+        )
+
     def setup_fluid_fields(self):
         setup_magnetic_field_aliases(self, "amrvac", [f"mag{ax}" for ax in "xyz"])
         self._setup_velocity_fields()  # gas velocities
@@ -309,6 +344,11 @@ class AMRVACFieldInfo(FieldInfoContainer):
                 units=us["density"] * us["velocity"] ** 2,
                 dimensions=dimensions.density * dimensions.velocity ** 2,
                 sampling_type="cell",
+            )
+            self.alias(
+                ("amrvac", "thermal_pressure"),
+                ("gas", "thermal_pressure"),
+                units="code_pressure",
             )
 
             # sound speed and temperature depend on thermal pressure
