@@ -7,6 +7,7 @@ AMRVAC-specific fields
 import functools
 
 import numpy as np
+import sympy as sp
 
 from yt.fields.field_info_container import FieldInfoContainer
 from yt.fields.magnetic_field import setup_magnetic_field_aliases
@@ -50,6 +51,21 @@ def _velocity(field, data, idir, prefix=None):
             raise RuntimeError
         rho[mask1] = 1
     return moment / rho
+
+
+def _b0i_field_split(field, data, idir):
+    # This is meant to be used with functools.partial and magnetic field splitting.
+    # The sympy-expressions are lambified and evaluated over the grid, and the total
+    # magnetic field is returned (instead of the perturbed one).
+    # idir : int
+    #   the direction index (1, 2 or 3)
+    b0i = sp.lambdify(
+        data.ds._allowed_b0split_symbols, data.ds._b0field.get(f"b0{idir}"), "numpy"
+    )(data["index", "x"], data["index", "y"], data["index", "z"])
+    b0i_total = b0i * data.ds.magnetic_unit + data["amrvac", f"b{idir}"].to(
+        data.ds.magnetic_unit
+    )
+    return b0i_total
 
 
 code_density = "code_mass / code_length**3"
@@ -162,11 +178,38 @@ class AMRVACFieldInfo(FieldInfoContainer):
                 sampling_type="cell",
             )
 
-    def setup_fluid_fields(self):
+    def _setup_b0split_fields(self):
+        mylog.info("Setting up fields with magnetic field splitting enabled.")
+        for idir in "123":
+            if ("amrvac", f"b{idir}") not in self.ds.field_list:
+                break
+            b0i_field_split_fn = functools.partial(_b0i_field_split, idir=idir)
+            functools.update_wrapper(b0i_field_split_fn, _b0i_field_split)
+            # this will override the default fields ("gas", "magnetic_i")
+            # dimensionful analog
+            self.add_field(
+                ("gas", f"magnetic_{idir}"),
+                function=b0i_field_split_fn,
+                sampling_type="cell",
+                units=self.ds.unit_system["magnetic_field_cgs"],
+                dimensions=dimensions.magnetic_field_cgs,
+                force_override=True,
+            )
+            # alias for code unit analog
+            self.alias(
+                ("amrvac", f"magnetic_{idir}"),
+                ("gas", f"magnetic_{idir}"),
+                units="code_magnetic",
+            )
 
+    def setup_fluid_fields(self):
         setup_magnetic_field_aliases(self, "amrvac", [f"mag{ax}" for ax in "xyz"])
         self._setup_velocity_fields()  # gas velocities
         self._setup_dust_fields()  # dust derived fields (including velocities)
+        # for magnetic field splitting, overrides default
+        # ("gas", "magnetic_i") and e fields
+        if self.ds._b0_is_split:
+            self._setup_b0split_fields()
 
         # fields with nested dependencies are defined thereafter
         # by increasing level of complexity
