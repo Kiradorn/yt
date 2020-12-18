@@ -53,21 +53,6 @@ def _velocity(field, data, idir, prefix=None):
     return moment / rho
 
 
-def _b0i_field_split(field, data, idir):
-    # This is meant to be used with functools.partial and magnetic field splitting.
-    # The sympy-expressions are lambified and evaluated over the grid, and the total
-    # magnetic field is returned (instead of the perturbed one).
-    # idir : int
-    #   the direction index (1, 2 or 3)
-    b0i = sp.lambdify(
-        data.ds._allowed_b0split_symbols, data.ds._b0field.get(f"b0{idir}"), "numpy"
-    )(data["index", "x"], data["index", "y"], data["index", "z"])
-    b0i_total = b0i * data.ds.magnetic_unit + data["amrvac", f"b{idir}"].to(
-        data.ds.magnetic_unit
-    )
-    return b0i_total
-
-
 code_density = "code_mass / code_length**3"
 code_moment = "code_mass / code_length**2 / code_time"
 code_pressure = "code_mass / code_length / code_time**2"
@@ -179,6 +164,21 @@ class AMRVACFieldInfo(FieldInfoContainer):
             )
 
     def _setup_b0split_fields(self):
+        def _b0i_field_split(field, data, idir):
+            # This is meant to be used with functools.partial and magnetic field splitting.
+            # The sympy-expressions are lambified and evaluated over the grid, and the total
+            # magnetic field is returned (instead of the perturbed one).
+            # idir : int
+            #   the direction index (1, 2 or 3)
+            b0i = sp.lambdify(
+                data.ds._allowed_b0split_symbols, data.ds._b0field.get(f"b0{idir}"),
+                "numpy"
+            )(data["index", "x"], data["index", "y"], data["index", "z"])
+            b0i_total = b0i * data.ds.magnetic_unit + data["amrvac", f"b{idir}"].to(
+                data.ds.magnetic_unit
+            )
+            return b0i_total
+
         mylog.info("Setting up fields with magnetic field splitting enabled.")
         for idir in "123":
             if ("amrvac", f"b{idir}") not in self.ds.field_list:
@@ -195,7 +195,7 @@ class AMRVACFieldInfo(FieldInfoContainer):
                 dimensions=dimensions.magnetic_field_cgs,
                 force_override=True,
             )
-            # alias for code unit analog
+            # make alias for magnetic code unit analogs
             self.alias(
                 ("amrvac", f"magnetic_{idir}"),
                 ("gas", f"magnetic_{idir}"),
@@ -204,24 +204,26 @@ class AMRVACFieldInfo(FieldInfoContainer):
 
         # override energy density, for B0-splitted datasets only the perturbed
         # energy e1 is saved to the datfile. Total energy density is then given by
-        # etot = e1 + B0**2/2 + B0 * B1
+        # etot = e1 + B0**2/2 + B0 * B1 where the last two terms should be divided
+        # by mu0 (see comment in magnetic energy density)
         def _etot_field_split(field, data):
-            b0total = data["amrvac", "magnetic_1"] ** 2
-            b1total = data["amrvac", "b1"] ** 2
-            for idir in "23":
+            b0_squared = 0
+            b0b1 = 0
+            for idir in "123":
                 if ("amrvac", f"b{idir}") not in self.ds.field_list:
                     break
-                b0total += data["amrvac", f"magnetic_{idir}"] ** 2
-                b1total += data["amrvac", f"b{idir}"] ** 2
-            # divide by mu0, see comment in magnetic energy density
+                b0_squared += data["amrvac", f"magnetic_{idir}"] ** 2
+                b0b1 += data["amrvac", f"magnetic_{idir}"] * data["amrvac", f"b{idir}"]
+            # TODO: for some reason b0*b1 is positive in yt, this should be negative??
+            b0b1 *= -1
             etot = (
                 data["amrvac", "e"]
-                + 0.5 * b0total / (4 * np.pi)
-                + np.sqrt(b0total * b1total) / (4 * np.pi)
+                + 0.5 * b0_squared / (4 * np.pi)
+                + b0b1 / (4 * np.pi)
             )
             return etot
 
-        # dimensionful analog, force override default e field
+        # force override default e field
         self.add_field(
             ("gas", "energy_density"),
             function=_etot_field_split,
