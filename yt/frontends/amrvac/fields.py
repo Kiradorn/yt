@@ -81,6 +81,7 @@ class AMRVACFieldInfo(FieldInfoContainer):
         ("m2", (code_moment, ["moment_2"], None)),
         ("m3", (code_moment, ["moment_3"], None)),
         ("e", (code_pressure, ["energy_density"], None)),
+        ("eaux", (code_pressure, ["internal_energy_density"], None)),
         ("b1", ("code_magnetic", ["magnetic_1"], None)),
         ("b2", ("code_magnetic", ["magnetic_2"], None)),
         ("b3", ("code_magnetic", ["magnetic_3"], None)),
@@ -204,23 +205,20 @@ class AMRVACFieldInfo(FieldInfoContainer):
 
         # override energy density, for B0-splitted datasets only the perturbed
         # energy e1 is saved to the datfile. Total energy density is then given by
-        # etot = e1 + B0**2/2 + B0 * B1 where the last two terms should be divided
-        # by mu0 (see comment in magnetic energy density)
+        # etot = e_internal + e_kinetic + e_magnetic
         def _etot_field_split(field, data):
-            b0_squared = 0
-            b0b1 = 0
-            for idir in "123":
-                if ("amrvac", f"b{idir}") not in self.ds.field_list:
-                    break
-                b0_squared += data["amrvac", f"magnetic_{idir}"] ** 2
-                b0b1 += data["amrvac", f"magnetic_{idir}"] * data["amrvac", f"b{idir}"]
-            # TODO: for some reason b0*b1 is positive in yt, this should be negative??
-            b0b1 *= -1
-            etot = (
-                data["amrvac", "e"]
-                + 0.5 * b0_squared / (4 * np.pi)
-                + b0b1 / (4 * np.pi)
-            )
+            try:
+                data['amrvac','eaux']
+            except:
+                mylog.warning("eaux not provided in bsplit .dat, unable to recover true energy")
+                mylog.info("Defaulting back to perturbed energy")
+                etot=data["gas","energy_density"]
+            else:
+                etot = (data["gas", "internal_energy_density"]
+                    + data["gas","kinetic_energy_density"]
+                    + data["gas","magnetic_energy_density"]
+                )
+            
             return etot
 
         # force override default e field
