@@ -171,10 +171,15 @@ class AMRVACFieldInfo(FieldInfoContainer):
             # magnetic field is returned (instead of the perturbed one).
             # idir : int
             #   the direction index (1, 2 or 3)
+
             b0i = sp.lambdify(
                 data.ds._allowed_b0split_symbols, data.ds._b0field.get(f"b0{idir}"),
                 "numpy"
-            )(data["index", "x"], data["index", "y"], data["index", "z"])
+            )(
+                data["index", "x"].value, 
+                data["index", "y"].value, 
+                data["index", "z"].value
+            )
             b0i_total = b0i * data.ds.magnetic_unit + data["amrvac", f"b{idir}"].to(
                 data.ds.magnetic_unit
             )
@@ -206,36 +211,31 @@ class AMRVACFieldInfo(FieldInfoContainer):
         # override energy density, for B0-splitted datasets only the perturbed
         # energy e1 is saved to the datfile. Total energy density is then given by
         # etot = e_internal + e_kinetic + e_magnetic
-        def _etot_field_split(field, data):
-            try:
-                data['amrvac','eaux']
-            except:
-                mylog.warning("eaux not provided in bsplit .dat, unable to recover true energy")
-                mylog.info("Defaulting back to perturbed energy")
-                etot=data["gas","energy_density"]
-            else:
-                etot = (data["gas", "internal_energy_density"]
+        if ('amrvac','eaux') in self.ds.field_list:
+            def _etot_field_split(field, data):
+                return (data["gas", "internal_energy_density"]
                     + data["gas","kinetic_energy_density"]
                     + data["gas","magnetic_energy_density"]
-                )
-            
-            return etot
+                    )
 
-        # force override default e field
-        self.add_field(
-            ("gas", "energy_density"),
-            function=_etot_field_split,
-            sampling_type="cell",
-            units=self.ds.unit_system["density"] * self.ds.unit_system["velocity"] ** 2,
-            dimensions=dimensions.density * dimensions.velocity ** 2,
-            force_override=True,
-        )
-        # alias for code unit analog
-        self.alias(
-            ("amrvac", "energy_density"),
-            ("gas", "energy_density"),
-            units="code_pressure",
-        )
+            # force override default e field
+            self.add_field(
+                ("gas", "energy_density"),
+                function=_etot_field_split,
+                sampling_type="cell",
+                units=self.ds.unit_system["density"] * self.ds.unit_system["velocity"] ** 2,
+                dimensions=dimensions.density * dimensions.velocity ** 2,
+                force_override=True,
+            )
+            # alias for code unit analog
+            self.alias(
+                ("amrvac", "energy_density"),
+                ("gas", "energy_density"),
+                units="code_pressure",
+            )
+        else:
+            mylog.warning("eaux not provided in bsplit .dat, unable to recover true energy")
+            mylog.info("Defaulting back to perturbed energy")
 
     def setup_fluid_fields(self):
         setup_magnetic_field_aliases(self, "amrvac", [f"mag{ax}" for ax in "xyz"])
