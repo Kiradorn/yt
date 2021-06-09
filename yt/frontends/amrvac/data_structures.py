@@ -147,6 +147,7 @@ class AMRVACDataset(Dataset):
         geometry_override=None,
         b0field=None,
         parfiles=None,
+        ionisation_table=False,
     ):
         """Instanciate AMRVACDataset.
 
@@ -241,6 +242,19 @@ class AMRVACDataset(Dataset):
         self.fluid_types += ("amrvac",)
         # refinement factor between a grid and its subgrid
         self.refine_by = 2
+
+        self.ionisation=ionisation_table
+        # if ionisation_table:
+        #     self.ionisation=True
+
+        self.wavelength='094'
+        self.euv_table_aia_094=self._loadGtable('094')
+        self.euv_table_aia_131=self._loadGtable('131')
+        self.euv_table_aia_171=self._loadGtable('171')
+        self.euv_table_aia_193=self._loadGtable('193')
+        self.euv_table_aia_211=self._loadGtable('211')
+        self.euv_table_aia_304=self._loadGtable('304')
+        self.euv_table_aia_335=self._loadGtable('335')
 
     @classmethod
     def _is_valid(cls, filename, *args, **kwargs):
@@ -507,6 +521,55 @@ class AMRVACDataset(Dataset):
         # we accept numberdensity_unit as a valid override
         "numberdensity_unit": "cm**-3",
     }
+
+    def _readArray(self,f,num):
+        '''read array from data file, require filehandle and length of the 
+        array'''
+        arr=np.empty(num)
+        i=0
+        while i < num:
+            tmp=f.readline().split()
+            for elem in tmp:
+                arr[i] = float(elem)
+                i=i+1
+
+        return arr
+
+    def _loadGtable(self,ion):
+        '''reads response function (n_e, T_e) 2D tables, requires ion'''
+        possible_abund=['co','ph'] # Possible to assume either (co)ronal or (ph)otospheric abundances
+        abund='co' # Default is to assume coronal abundances
+        dirgot = os.path.dirname(os.path.realpath(__file__)) + '/tables/euv_aia/'
+        filegot = ''.join(['goft_table_aia',str(ion),'_ab'+abund+'_extro.dat'])
+        filename = dirgot+filegot
+
+        f = open(filename, 'r')
+
+        ion   = float(f.readline())
+        w00   = float(f.readline())
+        watom = float(f.readline())
+        (numn,numt) = f.readline().split()
+        numn=int(float(numn));numt=int(numt)
+        
+        
+        logt  = self._readArray(f,numt)
+
+        goft_mat = np.empty((numn,numt))
+        n_e_lg   = np.empty(numn)
+
+        i=0
+        while True:
+            line     = f.readline()
+            if not line: break
+            n_e_0    = float(line)
+            g_t      = self._readArray(f,numt)
+            goft_mat[i,:] = g_t
+            n_e_lg[i] = n_e_0
+            i=i+1
+
+        f.close()
+        return {'ion': ion, 'n_e_lg': n_e_lg, 'logt': logt, 
+                'goft_mat': goft_mat,'watom': watom}
 
     @classmethod
     def _validate_units_override_keys(cls, units_override):
