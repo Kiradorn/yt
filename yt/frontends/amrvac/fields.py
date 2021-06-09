@@ -416,6 +416,76 @@ class AMRVACFieldInfo(FieldInfoContainer):
                 sampling_type="cell",
             )
 
+            def _get_saha_ne(field, data):
+                mass_hydrogen=1.67e-24
+                mass_electron=9.11e-28
+                k_b=pc.boltzmann_constant_cgs.value
+                p_c=6.63e-27
+
+                xsi_hydrogen=13.53*1.602e-12
+                xsi_helium=24.48*1.602e-12
+                xsi_heliumI=54.17*1.602e-12
+                a_0=5.29177e-9 #Bohr radius in cm
+                Ry=13.60569*1.602e-12
+                N_T=1e11 #Total number density (assumed)
+
+                Z_eff=1.0
+                q=np.sqrt(Z_eff/(2.0*np.pi*a_0),dtype=float)*np.power(N_T,-1.0/6.0,dtype=float)
+                n_max=0.5*q*(1.0+np.sqrt(1.0+4.0/q,dtype=float))
+                E_cut=(13.59844*1.602e-12)-(np.square(Z_eff,dtype=float)*Ry/np.power(n_max,2.0,dtype=float))
+                U_H=2.0*np.exp(-Ry/(k_b*data['temperature'].value),dtype=float)+278.0*np.exp(-150991.49/data['temperature'].value,dtype=float)+((2.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*data['temperature'].value)))
+
+                U_HI=1.0
+
+                Z_eff=2.0
+                q=np.sqrt(Z_eff/(2.0*np.pi*a_0),dtype=float)*np.power(N_T,-1.0/6.0,dtype=float)
+                n_max=0.5*q*(1.0+np.sqrt(1.0+4.0/q,dtype=float))
+                E_cut=(24.58741*1.602e-12)-(np.square(Z_eff,dtype=float)*Ry/np.power(n_max,2.0,dtype=float))
+                U_He=1.0*np.exp(-1.78678*Ry/(k_b*data['temperature'].value),dtype=float)+556.0*np.exp(-278302.52/data['temperature'].value,dtype=float)+((4.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*data['temperature'].value)))
+
+                Z_eff=2.0
+                q=np.sqrt(Z_eff/(2.0*np.pi*a_0),dtype=float)*np.power(N_T,-1.0/6.0,dtype=float)
+                n_max=0.5*q*(1.0+np.sqrt(1.0+4.0/q,dtype=float))
+                E_cut=(54.41778*1.602e-12)-(np.square(Z_eff,dtype=float)*Ry/np.power(n_max,2.0,dtype=float))
+                U_HeI=2.0*np.exp(-4.0*Ry/(k_b*data['temperature'].value),dtype=float)+278.0*np.exp(-604233.37/data['temperature'].value,dtype=float)+((2.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*data['temperature'].value)))
+
+                U_HeII=1.0
+
+                #Saha equations
+                K_1 = 2.0 * (U_HI/U_H) * (((2.0 * np.pi * mass_electron * k_b * data['temperature'].value)**1.5)/(p_c**3))*np.exp(-xsi_hydrogen/(k_b*data['temperature'].value))
+
+                K_2 = 2.0 * (U_HeI/U_He) * (((2.0 * np.pi * mass_electron * k_b * data['temperature'].value)**1.5)/(p_c**3))*np.exp(-xsi_helium/(k_b*data['temperature'].value))
+
+                K_3 = 2.0 * (U_HeII/U_HeI) * (((2.0 * np.pi * mass_electron * k_b * data['temperature'].value)**1.5)/(p_c**3))*np.exp(-xsi_heliumI/(k_b*data['temperature'].value))
+
+                #Iterative Solver
+
+                nHe=data['gas','number_density'].value/10.
+                nH=data['gas','number_density'].value
+                
+                deltae=1.e7
+                n_e=1e11 # initial value
+                while deltae>1e-4:
+                    n_H=nH/(1.0+K_1/n_e) # neutral hydrogen number density
+                    n_H1=nH-n_H # once-ionised hydrogen number density
+                    n_He=nHe/(K_2*K_3/(n_e*n_e)+1.0+K_2/n_e) # neutral helium number density
+                    n_He1=K_2/n_e*n_He # once-ionised helium number density
+                    n_He2=nHe-n_He1-n_He # twice-ionised hydrogen number density
+                    n_i=n_He1+n_He2+n_H1 # Ion density
+                    deltae=abs(np.amax(n_He1+n_He2*2.0+n_H1-n_e) ) # check the charge neutrality condition
+                    deltae=deltae/np.amin(n_He1+n_He2*2.0+n_H1) # check the charge neutrality condition
+                    n_e=n_He1+n_He2*2.0+n_H1 # Electron density
+
+                return n_e*data.ds.units.cm**-3
+
+            self.add_field(
+                ("gas", "saha_electron_number_density"),
+                function=_get_saha_ne,
+                units=us["length"]**-3,
+                dimensions=dimensions.length**-3,
+                sampling_type="cell",
+            )
+
             def _halpha_abcof(field, data): #Absorption coefficient
                 f23 = 0.6407
                 n2 = data['gas','electron_number_density'].to('cm**-3')**2 / (data['gas','fpar'] * 1e16) #fpar table in multiples of 1e16
@@ -623,9 +693,9 @@ class AMRVACFieldInfo(FieldInfoContainer):
                 logn=tabledic[self.ds.wavelength]['n_e_lg']
                 gmat=tabledic[self.ds.wavelength]['goft_mat']
                 
-                ce=_findintable(data['gas','temperature'].value,data['gas','electron_number_density'].value,logT,logn,gmat)
+                ce=_findintable(data['gas','temperature'].value,data['gas','saha_electron_number_density'].value,logT,logn,gmat)
                 
-                emiss = abs((Ab/(4.0*np.pi))*data['gas','electron_number_density'].value**2 * ce)
+                emiss = abs((Ab/(4.0*np.pi))*data['gas','saha_electron_number_density'].value**2 * ce)
                 
                 return emiss*data.ds.units.erg*data.ds.units.s**-1*data.ds.units.cm**-3*data.ds.units.sr**-1
 
