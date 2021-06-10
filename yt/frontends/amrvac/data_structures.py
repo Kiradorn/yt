@@ -24,6 +24,8 @@ from .datfile_utils import get_header, get_tree_info
 from .fields import AMRVACFieldInfo
 from .io import read_amrvac_namelist
 
+from yt.frontends.amrvac.physics import ionisation
+
 
 class AMRVACGrid(AMRGridPatch):
     """A class to populate AMRVACHierarchy.grids, setting parent/children relations."""
@@ -243,9 +245,13 @@ class AMRVACDataset(Dataset):
         # refinement factor between a grid and its subgrid
         self.refine_by = 2
 
+        self.velocity_projection=False
+        self.velocity_projection_position=[0,1,0]
+
         self.ionisation=ionisation_table
-        # if ionisation_table:
-        #     self.ionisation=True
+        self.altitude=10000
+        # if self.ionisation:
+        #     ionisation.init_splines(self.altitude)
 
         self.wavelength='094'
         self.euv_table_aia_094=self._loadGtable('094')

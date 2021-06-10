@@ -377,10 +377,17 @@ class AMRVACFieldInfo(FieldInfoContainer):
         
         if self.ds.ionisation:
 
+            ionisation.init_splines(self.ds.altitude)
+
             def _nlte_ion(field, data):
                 # mylog.info('ionisation altitude: '+str(data.ds.altitude)+' km')
                 # ionisation.init_splines(self.ds.altitude)
-                return ionisation.spline_ion.ev(data["gas","temperature"], data["gas","thermal_pressure"])*data.ds.units.dimensionless
+                # return ionisation.spline_ion.ev(data["gas","temperature"], data["gas","thermal_pressure"])*data.ds.units.dimensionless
+                '''For some reason it looks like the computation is faster using the values direct from the file and converting than using the e.g., 'temperature' field'''
+
+                temperature=data["amrvac","Te"].value*data.ds.temperature_unit
+                pressure=data["amrvac","rho"]*data["amrvac","Te"]*data.ds.pressure_unit
+                return ionisation.spline_ion.ev(temperature,pressure)*data.ds.units.dimensionless
 
             self.add_field(
                 ("gas", "nlte_ion"),
@@ -393,7 +400,9 @@ class AMRVACFieldInfo(FieldInfoContainer):
             def _fpar(field, data):
                 # mylog.info('ionisation altitude: '+str(data.ds.altitude)+' km')
                 # ionisation.init_splines(self.ds.altitude)
-                return ionisation.spline_f.ev(data["gas","temperature"], data["gas","thermal_pressure"])*(data.ds.units.cm**-3)
+                temperature=data["amrvac","Te"].value*data.ds.temperature_unit
+                pressure=data["amrvac","rho"]*data["amrvac","Te"]*data.ds.pressure_unit
+                return ionisation.spline_f.ev(temperature, pressure)*(data.ds.units.cm**-3)
 
             self.add_field(
                 ("gas", "fpar"),
@@ -404,9 +413,11 @@ class AMRVACFieldInfo(FieldInfoContainer):
             )
 
             def _get_ne(field, data):
-                return data["gas","thermal_pressure"] / ((1 + 1.1 / data['gas','nlte_ion'])
+                temperature=data["amrvac","Te"].value*data.ds.temperature_unit
+                pressure=data["amrvac","rho"].value*data["amrvac","Te"].value*data.ds.pressure_unit
+                return pressure / ((1 + 1.1 / data['gas','nlte_ion'])
                     * pc.boltzmann_constant_cgs 
-                    * data["gas","temperature"])
+                    * temperature)
 
             self.add_field(
                 ("gas", "electron_number_density"),
@@ -417,6 +428,7 @@ class AMRVACFieldInfo(FieldInfoContainer):
             )
 
             def _get_saha_ne(field, data):
+                temperature=data["amrvac","Te"].value*data.ds.temperature_unit
                 mass_hydrogen=1.67e-24
                 mass_electron=9.11e-28
                 k_b=pc.boltzmann_constant_cgs.value
@@ -433,7 +445,7 @@ class AMRVACFieldInfo(FieldInfoContainer):
                 q=np.sqrt(Z_eff/(2.0*np.pi*a_0),dtype=float)*np.power(N_T,-1.0/6.0,dtype=float)
                 n_max=0.5*q*(1.0+np.sqrt(1.0+4.0/q,dtype=float))
                 E_cut=(13.59844*1.602e-12)-(np.square(Z_eff,dtype=float)*Ry/np.power(n_max,2.0,dtype=float))
-                U_H=2.0*np.exp(-Ry/(k_b*data['temperature'].value),dtype=float)+278.0*np.exp(-150991.49/data['temperature'].value,dtype=float)+((2.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*data['temperature'].value)))
+                U_H=2.0*np.exp(-Ry/(k_b*temperature.value),dtype=float)+278.0*np.exp(-150991.49/temperature.value,dtype=float)+((2.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*temperature.value)))
 
                 U_HI=1.0
 
@@ -441,22 +453,22 @@ class AMRVACFieldInfo(FieldInfoContainer):
                 q=np.sqrt(Z_eff/(2.0*np.pi*a_0),dtype=float)*np.power(N_T,-1.0/6.0,dtype=float)
                 n_max=0.5*q*(1.0+np.sqrt(1.0+4.0/q,dtype=float))
                 E_cut=(24.58741*1.602e-12)-(np.square(Z_eff,dtype=float)*Ry/np.power(n_max,2.0,dtype=float))
-                U_He=1.0*np.exp(-1.78678*Ry/(k_b*data['temperature'].value),dtype=float)+556.0*np.exp(-278302.52/data['temperature'].value,dtype=float)+((4.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*data['temperature'].value)))
+                U_He=1.0*np.exp(-1.78678*Ry/(k_b*temperature.value),dtype=float)+556.0*np.exp(-278302.52/temperature.value,dtype=float)+((4.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*temperature.value)))
 
                 Z_eff=2.0
                 q=np.sqrt(Z_eff/(2.0*np.pi*a_0),dtype=float)*np.power(N_T,-1.0/6.0,dtype=float)
                 n_max=0.5*q*(1.0+np.sqrt(1.0+4.0/q,dtype=float))
                 E_cut=(54.41778*1.602e-12)-(np.square(Z_eff,dtype=float)*Ry/np.power(n_max,2.0,dtype=float))
-                U_HeI=2.0*np.exp(-4.0*Ry/(k_b*data['temperature'].value),dtype=float)+278.0*np.exp(-604233.37/data['temperature'].value,dtype=float)+((2.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*data['temperature'].value)))
+                U_HeI=2.0*np.exp(-4.0*Ry/(k_b*temperature.value),dtype=float)+278.0*np.exp(-604233.37/temperature.value,dtype=float)+((2.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*temperature.value)))
 
                 U_HeII=1.0
 
                 #Saha equations
-                K_1 = 2.0 * (U_HI/U_H) * (((2.0 * np.pi * mass_electron * k_b * data['temperature'].value)**1.5)/(p_c**3))*np.exp(-xsi_hydrogen/(k_b*data['temperature'].value))
+                K_1 = 2.0 * (U_HI/U_H) * (((2.0 * np.pi * mass_electron * k_b * temperature.value)**1.5)/(p_c**3))*np.exp(-xsi_hydrogen/(k_b*temperature.value))
 
-                K_2 = 2.0 * (U_HeI/U_He) * (((2.0 * np.pi * mass_electron * k_b * data['temperature'].value)**1.5)/(p_c**3))*np.exp(-xsi_helium/(k_b*data['temperature'].value))
+                K_2 = 2.0 * (U_HeI/U_He) * (((2.0 * np.pi * mass_electron * k_b * temperature.value)**1.5)/(p_c**3))*np.exp(-xsi_helium/(k_b*temperature.value))
 
-                K_3 = 2.0 * (U_HeII/U_HeI) * (((2.0 * np.pi * mass_electron * k_b * data['temperature'].value)**1.5)/(p_c**3))*np.exp(-xsi_heliumI/(k_b*data['temperature'].value))
+                K_3 = 2.0 * (U_HeII/U_HeI) * (((2.0 * np.pi * mass_electron * k_b * temperature.value)**1.5)/(p_c**3))*np.exp(-xsi_heliumI/(k_b*temperature.value))
 
                 #Iterative Solver
 
@@ -487,13 +499,34 @@ class AMRVACFieldInfo(FieldInfoContainer):
             )
 
             def _halpha_abcof(field, data): #Absorption coefficient
+                temperature=data["amrvac","Te"].value*data.ds.temperature_unit
+                velocity_x=data['gas','velocity_x']
+                velocity_y=data['gas','velocity_y']
+                velocity_z=data['gas','velocity_z']
+
+
                 f23 = 0.6407
                 n2 = data['gas','electron_number_density'].to('cm**-3')**2 / (data['gas','fpar'] * 1e16) #fpar table in multiples of 1e16
                 ksi = 5 * 1e5 *data.ds.units.cm/data.ds.units.s  # microturbulence in cm/s
                 nu_0 = (pc.c / (6562.8 * 1e-8*data.ds.units.cm))       # H-alpha wavelength is 6562.8 Angstrom
-                delta_nu = 0/data.ds.units.s
+                
+                if self.ds.velocity_projection:
+                    # print(self.ds.velocity_projection_position[0])
+                    # print(self.ds.velocity_projection_position[1])
+                    # print(self.ds.velocity_projection_position[2])
+                    # print(velocity_x)
+                    projected_v=-self.ds.velocity_projection_position[0]*velocity_x
+                    projected_v+=-self.ds.velocity_projection_position[1]*velocity_y
+                    projected_v+=-self.ds.velocity_projection_position[2]*velocity_z
+                    # delta_nu=(pc.c**2)/(6562.8 * 1e-8*data.ds.units.cm*projected_v)
+                    delta_nu=projected_v/(6562.8 * 1e-8*data.ds.units.cm)
+                    # print(delta_nu)
+                    # delta_nu = 0/data.ds.units.s
+                else:
+                    delta_nu = 0/data.ds.units.s
+                
                 delta_nuD = ((nu_0 / pc.c) * \
-                            np.sqrt((2 * pc.boltzmann_constant_cgs * data['gas','temperature']) / pc.mp + ksi ** 2)).to('1/s')
+                            np.sqrt((2 * pc.boltzmann_constant_cgs * temperature) / pc.mp + ksi ** 2)).to('1/s')
                 phi_nu = 1.0 / (np.sqrt(np.pi) * delta_nuD) * np.exp(-delta_nu / delta_nuD) ** 2
                 abcof = (np.pi * pc.elementary_charge**2 / (pc.me * pc.c)) * \
                                         f23 * n2 * phi_nu
@@ -509,6 +542,7 @@ class AMRVACFieldInfo(FieldInfoContainer):
 
             def _euv_abcof(field, data):
 
+                temperature=data["amrvac","Te"].value*data.ds.temperature_unit
                 A_H=10.0/11.0
                 A_He=1.0/10.0
                 
@@ -528,7 +562,7 @@ class AMRVACFieldInfo(FieldInfoContainer):
                 q=np.sqrt(Z_eff/(2.0*np.pi*a_0),dtype=float)*np.power(N_T,-1.0/6.0,dtype=float)
                 n_max=0.5*q*(1.0+np.sqrt(1.0+4.0/q,dtype=float))
                 E_cut=(13.59844*1.602e-12)-(np.square(Z_eff,dtype=float)*Ry/np.power(n_max,2.0,dtype=float))
-                U_H=2.0*np.exp(-Ry/(k_b*data['temperature'].value),dtype=float)+278.0*np.exp(-150991.49/data['temperature'].value,dtype=float)+((2.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*data['temperature'].value)))
+                U_H=2.0*np.exp(-Ry/(k_b*temperature.value),dtype=float)+278.0*np.exp(-150991.49/temperature.value,dtype=float)+((2.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*temperature.value)))
 
                 U_HI=1.0
 
@@ -536,22 +570,22 @@ class AMRVACFieldInfo(FieldInfoContainer):
                 q=np.sqrt(Z_eff/(2.0*np.pi*a_0),dtype=float)*np.power(N_T,-1.0/6.0,dtype=float)
                 n_max=0.5*q*(1.0+np.sqrt(1.0+4.0/q,dtype=float))
                 E_cut=(24.58741*1.602e-12)-(np.square(Z_eff,dtype=float)*Ry/np.power(n_max,2.0,dtype=float))
-                U_He=1.0*np.exp(-1.78678*Ry/(k_b*data['temperature'].value),dtype=float)+556.0*np.exp(-278302.52/data['temperature'].value,dtype=float)+((4.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*data['temperature'].value)))
+                U_He=1.0*np.exp(-1.78678*Ry/(k_b*temperature.value),dtype=float)+556.0*np.exp(-278302.52/temperature.value,dtype=float)+((4.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*temperature.value)))
 
                 Z_eff=2.0
                 q=np.sqrt(Z_eff/(2.0*np.pi*a_0),dtype=float)*np.power(N_T,-1.0/6.0,dtype=float)
                 n_max=0.5*q*(1.0+np.sqrt(1.0+4.0/q,dtype=float))
                 E_cut=(54.41778*1.602e-12)-(np.square(Z_eff,dtype=float)*Ry/np.power(n_max,2.0,dtype=float))
-                U_HeI=2.0*np.exp(-4.0*Ry/(k_b*data['temperature'].value),dtype=float)+278.0*np.exp(-604233.37/data['temperature'].value,dtype=float)+((2.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*data['temperature'].value)))
+                U_HeI=2.0*np.exp(-4.0*Ry/(k_b*temperature.value),dtype=float)+278.0*np.exp(-604233.37/temperature.value,dtype=float)+((2.0*(np.power(n_max,3.0,dtype=float) -343.0)/3.0)*np.exp(-E_cut/(k_b*temperature.value)))
 
                 U_HeII=1.0
 
                 #Saha equations
-                K_1 = 2.0 * (U_HI/U_H) * (((2.0 * np.pi * mass_electron * k_b * data['temperature'].value)**1.5)/(p_c**3))*np.exp(-xsi_hydrogen/(k_b*data['temperature'].value))
+                K_1 = 2.0 * (U_HI/U_H) * (((2.0 * np.pi * mass_electron * k_b * temperature.value)**1.5)/(p_c**3))*np.exp(-xsi_hydrogen/(k_b*temperature.value))
 
-                K_2 = 2.0 * (U_HeI/U_He) * (((2.0 * np.pi * mass_electron * k_b * data['temperature'].value)**1.5)/(p_c**3))*np.exp(-xsi_helium/(k_b*data['temperature'].value))
+                K_2 = 2.0 * (U_HeI/U_He) * (((2.0 * np.pi * mass_electron * k_b * temperature.value)**1.5)/(p_c**3))*np.exp(-xsi_helium/(k_b*temperature.value))
 
-                K_3 = 2.0 * (U_HeII/U_HeI) * (((2.0 * np.pi * mass_electron * k_b * data['temperature'].value)**1.5)/(p_c**3))*np.exp(-xsi_heliumI/(k_b*data['temperature'].value))
+                K_3 = 2.0 * (U_HeII/U_HeI) * (((2.0 * np.pi * mass_electron * k_b * temperature.value)**1.5)/(p_c**3))*np.exp(-xsi_heliumI/(k_b*temperature.value))
 
                 #Iterative Solver
 
@@ -646,6 +680,7 @@ class AMRVACFieldInfo(FieldInfoContainer):
                         jh[jh>lenseq-1]=lenseq-1
                         return [jl,jh]
                     
+
                     Tel=np.log10(Te)
                     nel=np.log10(ne)
                     LT=_findL(Tel,logT)
@@ -693,7 +728,9 @@ class AMRVACFieldInfo(FieldInfoContainer):
                 logn=tabledic[self.ds.wavelength]['n_e_lg']
                 gmat=tabledic[self.ds.wavelength]['goft_mat']
                 
-                ce=_findintable(data['gas','temperature'].value,data['gas','saha_electron_number_density'].value,logT,logn,gmat)
+                temperature=data["amrvac","Te"].value*data.ds.temperature_unit
+
+                ce=_findintable(temperature.value,data['gas','saha_electron_number_density'].value,logT,logn,gmat)
                 
                 emiss = abs((Ab/(4.0*np.pi))*data['gas','saha_electron_number_density'].value**2 * ce)
                 
