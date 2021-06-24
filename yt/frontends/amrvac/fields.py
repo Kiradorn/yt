@@ -511,23 +511,16 @@ class AMRVACFieldInfo(FieldInfoContainer):
                 nu_0 = (pc.c / (6562.8 * 1e-8*data.ds.units.cm))       # H-alpha wavelength is 6562.8 Angstrom
                 
                 if self.ds.velocity_projection:
-                    # print(self.ds.velocity_projection_position[0])
-                    # print(self.ds.velocity_projection_position[1])
-                    # print(self.ds.velocity_projection_position[2])
-                    # print(velocity_x)
                     projected_v=-self.ds.velocity_projection_position[0]*velocity_x
                     projected_v+=-self.ds.velocity_projection_position[1]*velocity_y
                     projected_v+=-self.ds.velocity_projection_position[2]*velocity_z
-                    # delta_nu=(pc.c**2)/(6562.8 * 1e-8*data.ds.units.cm*projected_v)
                     delta_nu=projected_v/(6562.8 * 1e-8*data.ds.units.cm)
-                    # print(delta_nu)
-                    # delta_nu = 0/data.ds.units.s
                 else:
                     delta_nu = 0/data.ds.units.s
                 
                 delta_nuD = ((nu_0 / pc.c) * \
                             np.sqrt((2 * pc.boltzmann_constant_cgs * temperature) / pc.mp + ksi ** 2)).to('1/s')
-                phi_nu = 1.0 / (np.sqrt(np.pi) * delta_nuD) * np.exp(-delta_nu / delta_nuD) ** 2
+                phi_nu = 1.0 / (np.sqrt(np.pi) * delta_nuD) * np.exp(-(delta_nu / delta_nuD) ** 2)
                 abcof = (np.pi * pc.elementary_charge**2 / (pc.me * pc.c)) * \
                                         f23 * n2 * phi_nu
                 return abcof
@@ -645,10 +638,6 @@ class AMRVACFieldInfo(FieldInfoContainer):
                 abcof+=cross_s_HeI*A_He*X_He1
                 abcof=abcof*(nH+nHe)
 
-                # abcof=cross_s_H*(data['gas','density'].to('g*cm**-3')/(1.1*pc.mp))
-                # abcof+=cross_s_He*(0.1*data['gas','density'].to('g*cm**-3')/(1.1*pc.mp))
-                # abcof+=cross_s_HeI*(0.1*data['gas','density'].to('g*cm**-3')/(1.1*pc.mp))
-
                 return abcof
 
             self.add_field(
@@ -658,6 +647,20 @@ class AMRVACFieldInfo(FieldInfoContainer):
                 dimensions=dimensions.length**-1,
                 sampling_type="cell",
             )        
+
+            def _halpha_emission(field,data):
+                Rsun=69570000000.0*data.ds.units.cm
+                W = 0.5 * ( 1 - np.sqrt(1 - (Rsun**2 / (Rsun + (self.ds.altitude*1e5*data.ds.units.cm))**2)) )* 0.17 * 4.077 * 1e-5 *data.ds.units.erg*data.ds.units.s**-1*data.ds.units.cm**-3*data.ds.units.sr**-1*data.ds.units.Hz**-1
+                int_prom = W * (1 - np.exp(-data['gas','halpha_absorption_coefficient']))
+                return int_prom
+
+            self.add_field(
+                ("gas", "halpha_emission"),
+                function=_halpha_emission,
+                units=self.ds.units.erg*self.ds.units.s**-1*self.ds.units.cm**-3*self.ds.units.sr**-1*self.ds.units.Hz**-1,
+                dimensions=self.ds.units.erg*self.ds.units.s**-1*self.ds.units.cm**-3*self.ds.units.sr**-1*self.ds.units.Hz**-1,
+                sampling_type="cell",
+            ) 
 
             def _emiss_jlambda(field,data):
                 '''get optically thin emission coefficient in specific wave length'''
