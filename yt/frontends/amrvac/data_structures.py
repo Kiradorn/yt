@@ -149,6 +149,7 @@ class AMRVACDataset(Dataset):
         geometry_override=None,
         b0field=None,
         parfiles=None,
+        default_species_fields=None,
         ionisation_table=False,
     ):
         """Instanciate AMRVACDataset.
