@@ -34,7 +34,7 @@ def test_profiles():
     e1, e2 = 0.9, 1.1
     for nb in [8, 16, 32, 64]:
         for input_units in ["mks", "cgs"]:
-            (rmi, rma), (tmi, tma), (dmi, dma) = [
+            (rmi, rma), (tmi, tma), (dmi, dma) = (
                 getattr(ex, f"in_{input_units}")()
                 for ex in dd.quantities["Extrema"](
                     [
@@ -43,7 +43,7 @@ def test_profiles():
                         ("stream", "dinosaurs"),
                     ]
                 )
-            ]
+            )
             # We log all the fields or don't log 'em all.  No need to do them
             # individually.
             for lf in [True, False]:
@@ -596,12 +596,12 @@ class TestBadProfiles(unittest.TestCase):
     def test_unequal_data_shape_profile(self):
         density = np.random.random(128)
         temperature = np.random.random(128)
-        cell_mass = np.random.random((128, 128))
+        mass = np.random.random((128, 128))
 
         my_data = {
             ("gas", "density"): density,
             ("gas", "temperature"): temperature,
-            ("gas", "cell_mass"): cell_mass,
+            ("gas", "mass"): mass,
         }
         fake_ds_med = {"current_time": yt.YTQuantity(10, "Myr")}
         field_types = {field: "gas" for field in my_data.keys()}
@@ -614,19 +614,19 @@ class TestBadProfiles(unittest.TestCase):
                 ds.data,
                 ("gas", "temperature"),
                 ("gas", "density"),
-                ("gas", "cell_mass"),
+                ("gas", "mass"),
             )
 
     @requires_module("h5py")
     def test_unequal_bin_field_profile(self):
         density = np.random.random(128)
         temperature = np.random.random(127)
-        cell_mass = np.random.random((128, 128))
+        mass = np.random.random((128, 128))
 
         my_data = {
             ("gas", "density"): density,
             ("gas", "temperature"): temperature,
-            ("gas", "cell_mass"): cell_mass,
+            ("gas", "mass"): mass,
         }
         fake_ds_med = {"current_time": yt.YTQuantity(10, "Myr")}
         field_types = {field: "gas" for field in my_data.keys()}
@@ -639,7 +639,7 @@ class TestBadProfiles(unittest.TestCase):
                 ds.data,
                 ("gas", "temperature"),
                 ("gas", "density"),
-                ("gas", "cell_mass"),
+                ("gas", "mass"),
             )
 
 

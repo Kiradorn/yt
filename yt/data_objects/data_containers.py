@@ -547,7 +547,7 @@ class YTDataContainer:
         Examples
         --------
         >>> sp = ds.sphere("c", (1.0, "Mpc"))
-        >>> t = sp.to_astropy_table([("gas", "density"),("gas", "temperature")])
+        >>> t = sp.to_astropy_table([("gas", "density"), ("gas", "temperature")])
         """
         from astropy.table import QTable
 
@@ -590,11 +590,11 @@ class YTDataContainer:
         >>> fn = sp.save_as_dataset(fields=[("gas", "density"), ("gas", "temperature")])
         >>> sphere_ds = yt.load(fn)
         >>> # the original data container is available as the data attribute
-        >>> print (sds.data[("gas", "density")])
+        >>> print(sds.data[("gas", "density")])
         [  4.46237613e-32   4.86830178e-32   4.46335118e-32 ...,   6.43956165e-30
            3.57339907e-30   2.83150720e-30] g/cm**3
         >>> ad = sphere_ds.all_data()
-        >>> print (ad[("gas", "temperature")])
+        >>> print(ad[("gas", "temperature")])
         [  1.00000000e+00   1.00000000e+00   1.00000000e+00 ...,   4.40108359e+04
            4.54380547e+04   4.72560117e+04] K
 
@@ -610,7 +610,7 @@ class YTDataContainer:
         else:
             data.update(self.field_data)
         # get the extra fields needed to reconstruct the container
-        tds_fields = tuple([("index", t) for t in self._tds_fields])
+        tds_fields = tuple(("index", t) for t in self._tds_fields)
         for f in [f for f in self._container_fields + tds_fields if f not in data]:
             data[f] = self[f]
         data_fields = list(data.keys())
@@ -743,16 +743,13 @@ class YTDataContainer:
         velocity_units : string
             The units that the velocity should be converted to in order to
             show streamlines in Firefly. Defaults to km/s.
-
-        coordinate_units: string
+        coordinate_units : string
             The units that the coordinates should be converted to. Defaults to
             kpc.
-
-        show_unused_fields: boolean
+        show_unused_fields : boolean
             A flag to optionally print the fields that are available, in the
             dataset but were not explicitly requested to be tracked.
-
-        dataset_name: string
+        dataset_name : string
             The name of the subdirectory the JSON files will be stored in
             (and the name that will appear in startup.json and in the dropdown
             menu at startup). e.g. `yt` -> json files will appear in
@@ -768,21 +765,24 @@ class YTDataContainer:
         --------
 
             >>> ramses_ds = yt.load(
-            ...     "/Users/agurvich/Desktop/yt_workshop/"+
-            ...     "DICEGalaxyDisk_nonCosmological/output_00002/info_00002.txt")
+            ...     "/Users/agurvich/Desktop/yt_workshop/"
+            ...     + "DICEGalaxyDisk_nonCosmological/output_00002/info_00002.txt"
+            ... )
 
-            >>> region = ramses_ds.sphere(ramses_ds.domain_center,(1000,'kpc'))
+            >>> region = ramses_ds.sphere(ramses_ds.domain_center, (1000, "kpc"))
 
             >>> reader = region.create_firefly_object(
             ...     path_to_firefly="/Users/agurvich/research/repos/Firefly",
             ...     fields_to_include=[
-            ...     'particle_extra_field_1',
-            ...     'particle_extra_field_2'],
-            ...     fields_units = ['dimensionless','dimensionless'],
-            ...     dataset_name = 'IsoGalaxyRamses')
+            ...         "particle_extra_field_1",
+            ...         "particle_extra_field_2",
+            ...     ],
+            ...     fields_units=["dimensionless", "dimensionless"],
+            ...     dataset_name="IsoGalaxyRamses",
+            ... )
 
-            >>> reader.options['color']['io']=[1,1,0,1]
-            >>> reader.particleGroups[0].decimation_factor=100
+            >>> reader.options["color"]["io"] = [1, 1, 0, 1]
+            >>> reader.particleGroups[0].decimation_factor = 100
             >>> reader.dumpToJSON()
         """
 
@@ -794,7 +794,7 @@ class YTDataContainer:
             raise ImportError(
                 "Can't find firefly_api, ensure it "
                 "is in your python path or install it with "
-                "'$ pip install firefly_api'. It is also available "
+                "`python -m pip install firefly_api`. It is also available "
                 "on github at github.com/agurvich/firefly_api"
             ) from e
 
@@ -914,10 +914,14 @@ class YTDataContainer:
         Examples
         --------
 
-        >>> temp_at_max_rho = reg.argmax(("gas", "density"), axis=("gas", "temperature"))
+        >>> temp_at_max_rho = reg.argmax(
+        ...     ("gas", "density"), axis=("gas", "temperature")
+        ... )
         >>> max_rho_xyz = reg.argmax(("gas", "density"))
-        >>> t_mrho, v_mrho = reg.argmax(("gas", "density"), axis=[("gas", "temperature"),
-        ...                 ("gas", "velocity_magnitude")])
+        >>> t_mrho, v_mrho = reg.argmax(
+        ...     ("gas", "density"),
+        ...     axis=[("gas", "temperature"), ("gas", "velocity_magnitude")],
+        ... )
         >>> x, y, z = reg.argmax(("gas", "density"))
 
         """
@@ -956,10 +960,14 @@ class YTDataContainer:
         Examples
         --------
 
-        >>> temp_at_min_rho = reg.argmin(("gas", "density"), axis=("gas", "temperature"))
+        >>> temp_at_min_rho = reg.argmin(
+        ...     ("gas", "density"), axis=("gas", "temperature")
+        ... )
         >>> min_rho_xyz = reg.argmin(("gas", "density"))
-        >>> t_mrho, v_mrho = reg.argmin(("gas", "density"), axis=[("gas", "temperature"),
-        ...                 ("gas", "velocity_magnitude")])
+        >>> t_mrho, v_mrho = reg.argmin(
+        ...     ("gas", "density"),
+        ...     axis=[("gas", "temperature"), ("gas", "velocity_magnitude")],
+        ... )
         >>> x, y, z = reg.argmin(("gas", "density"))
 
         """
@@ -1106,7 +1114,7 @@ class YTDataContainer:
         extrema=None,
         logs=None,
         units=None,
-        weight_field=("gas", "cell_mass"),
+        weight_field=("gas", "mass"),
         accumulation=False,
         fractional=False,
         deposition="ngp",
@@ -1166,11 +1174,13 @@ class YTDataContainer:
 
         >>> ds = load("DD0046/DD0046")
         >>> ad = ds.all_data()
-        >>> profile = ad.profile(ad, [("gas", "density")],
-        ...                          [("gas", "temperature"),
-        ...                          ("gas", "velocity_x")])
-        >>> print (profile.x)
-        >>> print (profile["gas", "temperature"])
+        >>> profile = ad.profile(
+        ...     ad,
+        ...     [("gas", "density")],
+        ...     [("gas", "temperature"), ("gas", "velocity_x")],
+        ... )
+        >>> print(profile.x)
+        >>> print(profile["gas", "temperature"])
         >>> plot = profile.plot()
         """
         p = create_profile(
@@ -1216,7 +1226,9 @@ class YTDataContainer:
         --------
 
         >>> avg_rho = reg.mean(("gas", "density"), weight="cell_volume")
-        >>> rho_weighted_T = reg.mean(("gas", "temperature"), axis=("index", "y"), weight=("gas", "density"))
+        >>> rho_weighted_T = reg.mean(
+        ...     ("gas", "temperature"), axis=("index", "y"), weight=("gas", "density")
+        ... )
         """
         weight_field = sanitize_weight_field(self.ds, field, weight)
         if axis in self.ds.coordinates.axis_name:
@@ -1273,7 +1285,7 @@ class YTDataContainer:
         ----------
         field : string or tuple field name
             The field to project.
-        weight: string or tuple field name
+        weight : string or tuple field name
             The field to weight the projection by
         axis : string
             The axis to project along.

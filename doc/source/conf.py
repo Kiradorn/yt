@@ -253,7 +253,7 @@ man_pages = [("index", "yt", "yt Documentation", ["The yt Project"], 1)]
 intersphinx_mapping = {
     "https://docs.python.org/3/": None,
     "https://ipython.readthedocs.io/en/stable/": None,
-    "https://docs.scipy.org/doc/numpy/": None,
+    "https://numpy.org/doc/stable/": None,
     "https://matplotlib.org/stable/": None,
     "https://docs.astropy.org/en/stable": None,
     "https://pandas.pydata.org/pandas-docs/stable": None,
@@ -265,7 +265,6 @@ intersphinx_mapping = {
 if not on_rtd:
     autosummary_generate = glob.glob("reference/api/api.rst")
 
-# as of Sphinx/1.6.1 this is the supported way to link custom style sheets
-#   see: https://github.com/ryan-roemer/sphinx-bootstrap-theme#adding-custom-css
+# as of Sphinx 3.1.2 this is the supported way to link custom style sheets
 def setup(app):
-    app.add_stylesheet("custom.css")
+    app.add_css_file("custom.css")

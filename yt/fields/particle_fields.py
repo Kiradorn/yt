@@ -33,14 +33,23 @@ sph_whitelist_fields = (
     "H_fraction",
     "He_fraction",
     "C_fraction",
+    "Ca_fraction",
     "N_fraction",
     "O_fraction",
+    "S_fraction",
     "Ne_fraction",
     "Mg_fraction",
     "Si_fraction",
     "Fe_fraction",
+    "H_density",
+    "He_density",
     "C_density",
+    "Ca_density",
+    "N_density",
     "O_density",
+    "S_density",
+    "Ne_density",
+    "Mg_density",
     "Si_density",
     "Fe_density",
 )
@@ -301,7 +310,7 @@ def standard_particle_fields(
     unit_system = registry.ds.unit_system
 
     def _particle_velocity_magnitude(field, data):
-        """ M{|v|} """
+        """M{|v|}"""
         return np.sqrt(
             data[ptype, f"relative_{svel % 'x'}"] ** 2
             + data[ptype, f"relative_{svel % 'y'}"] ** 2
